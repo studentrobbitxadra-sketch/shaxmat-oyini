@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shaxmat O'yini — Zamonaviy Klassika</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            color: #f8fafc;
+            min-height: 100vh;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Shaxmat taxtasi kataklari */
+        .board-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            max-width: 560px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 6px #334155;
+        }
+
+        .square {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        /* Klassik zamonaviy yog'och/zaytun ranglari */
+        .square.light {
+            background-color: #ebecd0;
+            color: #779556;
+        }
+
+        .square.dark {
+            background-color: #779556;
+            color: #ebecd0;
+        }
+
+        /* Tanlangan katak */
+        .square.selected {
+            background-color: #f6f669 !important;
+        }
+
+        /* Oxirgi yurish kataklari */
+        .square.last-move {
+            background-color: rgba(246, 246, 105, 0.55) !important;
+        }
+
+        /* Shoh (Check) holati */
+        .square.in-check {
+            background: radial-gradient(circle, #ef4444 0%, #b91c1c 85%) !important;
+            animation: pulse-danger 1.5s infinite;
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.5); }
+            50% { box-shadow: inset 0 0 22px rgba(255, 255, 255, 0.9); }
+        }
+
+        /* Mumkin bo'lgan yurish indikatori (bo'sh katak) */
+        .valid-move-dot {
+            width: 28%;
+            height: 28%;
+            background-color: rgba(0, 0, 0, 0.22);
+            border-radius: 50%;
+            pointer-events: none;
+            transition: transform 0.15s ease;
+        }
+
+        .square:hover .valid-move-dot {
+            transform: scale(1.2);
+            background-color: rgba(0, 0, 0, 0.35);
+        }
+
+        /* Raqib donasini urish indikatori */
+        .valid-capture-ring {
+            position: absolute;
+            width: 84%;
+            height: 84%;
+            border: 5px solid rgba(0, 0, 0, 0.25);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .square:hover .valid-capture-ring {
+            border-color: rgba(220, 38, 38, 0.6);
+        }
+
+        /* Shaxmat donalari */
+        .piece {
+            font-size: clamp(2rem, 7.5vw, 3.6rem);
+            line-height: 1;
+            z-index: 10;
+            transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+        }
+
+        .piece.white {
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.65), 0 0 2px #000;
+        }
+
+        .piece.black {
+            color: #18181b;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.35);
+        }
+
+        .square:hover .piece {
+            transform: scale(1.08);
+        }
+
+        /* Koordinatalar (a-h, 1-8) */
+        .coord-rank {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            opacity: 0.85;
+            pointer-events: none;
+        }
+
+        .coord-file {
+            position: absolute;
+            bottom: 1px;
+            right: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            opacity: 0.85;
+            pointer-events: none;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-3 sm:p-6">
+
+    <!-- Asosiy sarlavha va boshqaruv paneli -->
+    <header class="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 mb-5 bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-slate-700/60 shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-xl bg-emerald-600 flex items-center justify-center text-2xl shadow-lg shadow-emerald-900/40">
+                ♞
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">SHAXMAT</h1>
+                <p class="text-xs text-slate-400">Klassik strategiya o'yini</p>
+            </div>
+        </div>
+
+        <!-- O'yin rejimi va Tugmalar -->
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+            <div class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700">
+                <button id="mode-pvp" onclick="setGameMode('pvp')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow">
+                    👥 2 O'yinchi
+                </button>
+                <button id="mode-ai" onclick="setGameMode('ai')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+                    🤖 Botga qarshi
+                </button>
+            </div>
+
+            <button onclick="undoMove()" id="undo-btn" class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 active:scale-95 text-xs sm:text-sm font-semibold text-slate-200 transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none" title="Oxirgi yurishni bekor qilish">
+                <span>↩</span> Ortga
+            </button>
+
+            <button onclick="resetGame()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition-all flex items-center gap-1.5">
+                <span>↻</span> Qayta boshlash
+            </button>
+        </div>
+    </header>
+
+    <!-- Asosiy o'yin maydoni -->
+    <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Chap/Markaziy qism: Shaxmat taxtasi -->
+        <div class="lg:col-span-7 flex flex-col items-center w-full">
+            
+            <!-- Yuqori o'yinchi paneli (Qoralar) -->
+            <div id="player-black-bar" class="w-full max-w-[560px] flex items-center justify-between bg-slate-800/70 px-4 py-2.5 rounded-xl border border-slate-700/50 mb-3 transition-all">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-slate-600 flex items-center justify-center text-lg">♚</div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="black-player-name" class="font-bold text-sm text-slate-200">Qoralar</span>
+                            <span id="ai-thinking-badge" class="hidden text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full animate-pulse">O'ylamoqda...</span>
+                        </div>
+                        <div id="captured-by-black" class="flex items-center flex-wrap gap-0.5 text-base min-h-[22px] text-slate-300"></div>
+                    </div>
+                </div>
+                <div id="black-score" class="text-xs font-bold text-emerald-400 bg-slate-900/80 px-2.5 py-1 rounded-lg hidden"></div>
+            </div>
+
+            <!-- 8x8 Shaxmat taxtasi -->
+            <div id="chessboard" class="board-grid"></div>
+
+            <!-- Pastki o'yinchi paneli (Oqlar) -->
+            <div id="player-white-bar" class="w-full max-w-[560px] flex items-center justify-between bg-slate-800/70 px-4 py-2.5 rounded-xl border border-slate-700/50 mt-3 transition-all">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-900 flex items-center justify-center text-lg font-bold">♔</div>
+                    <div>
+                        <span class="font-bold text-sm text-white">Oqlar (Siz)</span>
+                        <div id="captured-by-white" class="flex items-center flex-wrap gap-0.5 text-base min-h-[22px] text-slate-300"></div>
+                    </div>
+                </div>
+                <div id="white-score" class="text-xs font-bold text-emerald-400 bg-slate-900/80 px-2.5 py-1 rounded-lg hidden"></div>
+            </div>
+        </div>
+
+        <!-- O'ng panel: Navbat indikatori, Holat va Yurishlar tarixi -->
+        <aside class="lg:col-span-5 w-full flex flex-col gap-4">
+            
+            <!-- Navbat va Holat kartochkasi -->
+            <div class="bg-slate-800/80 backdrop-blur-md p-5 rounded-2xl border border-slate-700/60 shadow-xl">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Joriy Holat</span>
+                    <span id="move-counter" class="text-xs font-medium text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full">Yurish: 1</span>
+                </div>
+
+                <!-- Navbat ko'rsatkichi -->
+                <div id="turn-indicator" class="flex items-center gap-3.5 p-3.5 rounded-xl bg-slate-900/90 border border-slate-700">
+                    <div id="turn-color-box" class="w-10 h-10 rounded-xl bg-white text-slate-900 flex items-center justify-center text-2xl shadow-md transition-all">
+                        ♔
+                    </div>
+                    <div>
+                        <div id="turn-text" class="text-lg font-extrabold text-white">Oqlar navbati</div>
+                        <div id="status-subtext" class="text-xs text-slate-400">Yurish uchun donani tanlang</div>
+                    </div>
+                </div>
+
+                <!-- Shoh / Mot xabarnoma qutisi -->
+                <div id="alert-banner" class="hidden mt-3 p-3 rounded-xl text-sm font-bold text-center transition-all"></div>
+            </div>
+
+            <!-- Yurishlar tarixi -->
+            <div class="bg-slate-800/80 backdrop-blur-md p-5 rounded-2xl border border-slate-700/60 shadow-xl flex flex-col h-[280px] sm:h-[320px]">
+                <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-700/70">
+                    <h2 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <span>📜</span> Yurishlar tarixi
+                    </h2>
+                    <span class="text-[11px] text-slate-400">Algebraik yozuv</span>
+                </div>
+                <div id="move-history" class="flex-1 overflow-y-auto space-y-1 pr-1 text-sm font-mono">
+                    <div class="text-slate-500 text-center italic text-xs py-8 font-sans">Hali yurishlar amalga oshirilmadi</div>
+                </div>
+            </div>
+
+            <!-- Qisqacha eslatma -->
+            <div class="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/40 text-xs text-slate-400 leading-relaxed">
+                <strong class="text-slate-300">Qoidalar:</strong> Rokirovka (Shoh 2 katak yon tomonga), piyodaning oxirgi qatorda Farzinga aylanishi va Shoh/Mot qoidalari to'liq qo'llab-quvvatlanadi.
+            </div>
+        </aside>
+    </main>
+
+    <!-- Piyodani almashtirish (Promotion) Modal oynasi -->
+    <div id="promotion-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-600 p-6 rounded-2xl max-w-xs w-full text-center shadow-2xl transform transition-all">
+            <h3 class="text-lg font-bold text-white mb-1">Piyoda yetib bordi!</h3>
+            <p class="text-xs text-slate-400 mb-4">Qaysi donaga aylantirishni tanlang:</p>
+            <div id="promotion-choices" class="grid grid-cols-4 gap-2">
+                <!-- JS orqali to'ldiriladi -->
+            </div>
+        </div>
+    </div>
+
+    <!-- O'yin tugashi (Mot / Durang) Modal oynasi -->
+    <div id="gameover-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-600 p-7 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+            <div id="gameover-icon" class="text-5xl mb-3">🏆</div>
+            <h2 id="gameover-title" class="text-2xl font-extrabold text-white mb-1">Mot!</h2>
+            <p id="gameover-desc" class="text-sm text-slate-300 mb-6">Oqlar g'alaba qozondi!</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeGameOverModal()" class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-semibold text-white transition-all">
+                    Taxtani ko'rish
+                </button>
+                <button onclick="resetGame()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-white shadow-lg transition-all">
+                    Yangi o'yin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * SHAXMAT O'YINI LOGIKASI (O'zbek tilida)
+         * To'liq qoidalar: Yurishlar tekshiruvi, Shoh (Check), Mot (Checkmate),
+         * Pat (Stalemate), Rokirovka (Castling), En Passant, Promotion va Oddiy AI Bot.
+         */
+
+        // Unicode shaxmat donalari
+        const PIECE_UNICODE = {
+            w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+            b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
+        };
+
+        // AI va hisob-kitob uchun donalar qiymati
+        const PIECE_VALUES = {
+            p: 10,
+            n: 30,
+            b: 32,
+            r: 50,
+            q: 90,
+            k: 900
+        };
+
+        // O'yin holati (State)
+        let board = [];
+        let turn = 'w'; // 'w' = Oqlar, 'b' = Qoralar
+        let selectedSquare = null; // { r, c }
+        let validMoves = []; // Tanlangan donaning yurishlari
+        let gameMode = 'pvp'; // 'pvp' (2 o'yinchi) yoki 'ai' (Botga qarshi)
+        let isGameOver = false;
+        let aiThinking = false;
+        let lastMove = null; // { from: {r, c}, to: {r, c} }
+        let enPassantTarget = null; // { r, c }
+        let castlingRights = {
+            w: { k: true, q: true },
+            b: { k: true, q: true }
+        };
+        let capturedPieces = { w: [], b: [] }; // w: Oqlar urib olgan qora donalar
+        let moveHistory = [];
+        let stateSnapshots = []; // Ortga qaytarish (Undo) uchun
+        let pendingPromotion = null; // { from, to }
+
+        // Dastlabki taxtani tuzish
+        function createInitialBoard() {
+            const backRank = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+            const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+
+            for (let c = 0; c < 8; c++) {
+                newBoard[0][c] = { type: backRank[c], color: 'b' };
+                newBoard[1][c] = { type: 'p', color: 'b' };
+                newBoard[6][c] = { type: 'p', color: 'w' };
+                newBoard[7][c] = { type: backRank[c], color: 'w' };
+            }
+            return newBoard;
+        }
+
+        // O'yinni boshlash / qayta tiklash
+        function resetGame() {
+            board = createInitialBoard();
+            turn = 'w';
+            selectedSquare = null;
+            validMoves = [];
+            isGameOver = false;
+            aiThinking = false;
+            lastMove = null;
+            enPassantTarget = null;
+            castlingRights = { w: { k: true, q: true }, b: { k: true, q: true } };
+            capturedPieces = { w: [], b: [] };
+            moveHistory = [];
+            stateSnapshots = [];
+            pendingPromotion = null;
+
+            closeGameOverModal();
+            document.getElementById('promotion-modal').classList.add('hidden');
+            document.getElementById('promotion-modal').classList.remove('flex');
+            document.getElementById('ai-thinking-badge').classList.add('hidden');
+
+            renderBoard();
+            updateUI();
+        }
+
+        // O'yin rejimini o'zgartirish (2 o'yinchi yoki AI Bot)
+        function setGameMode(mode) {
+            gameMode = mode;
+            const pvpBtn = document.getElementById('mode-pvp');
+            const aiBtn = document.getElementById('mode-ai');
+            const blackName = document.getElementById('black-player-name');
+
+            if (mode === 'pvp') {
+                pvpBtn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow";
+                aiBtn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white";
+                blackName.textContent = "Qoralar (2-o'yinchi)";
+            } else {
+                aiBtn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow";
+                pvpBtn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white";
+                blackName.textContent = "Qoralar (AI Bot)";
+            }
+            resetGame();
+        }
+
+        // Taxtani ekranga chizish
+        function renderBoard() {
+            const boardEl = document.getElementById('chessboard');
+            boardEl.innerHTML = '';
+
+            const kingInCheckPos = isKingInCheck(board, turn) ? findKing(board, turn) : null;
+            const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const squareEl = document.createElement('div');
+                    const isLight = (r + c) % 2 === 0;
+                    squareEl.className = `square ${isLight ? 'light' : 'dark'}`;
+
+                    // Tanlangan katak
+                    if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+                        squareEl.classList.add('selected');
+                    }
+
+                    // Oxirgi yurish kataklari
+                    if (lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c))) {
+                        squareEl.classList.add('last-move');
+                    }
+
+                    // Shoh (Check) holatidagi shoh katagi
+                    if (kingInCheckPos && kingInCheckPos.r === r && kingInCheckPos.c === c) {
+                        squareEl.classList.add('in-check');
+                    }
+
+                    // Koordinatalar
+                    if (c === 0) {
+                        const rankSpan = document.createElement('span');
+                        rankSpan.className = 'coord-rank';
+                        rankSpan.textContent = 8 - r;
+                        squareEl.appendChild(rankSpan);
+                    }
+                    if (r === 7) {
+                        const fileSpan = document.createElement('span');
+                        fileSpan.className = 'coord-file';
+                        fileSpan.textContent = files[c];
+                        squareEl.appendChild(fileSpan);
+                    }
+
+                    // Dona chizish
+                    const piece = board[r][c];
+                    if (piece) {
+                        const pieceEl = document.createElement('span');
+                        pieceEl.className = `piece ${piece.color === 'w' ? 'white' : 'black'}`;
+                        pieceEl.textContent = PIECE_UNICODE[piece.color][piece.type];
+                        squareEl.appendChild(pieceEl);
+                    }
+
+                    // Mumkin bo'lgan yurish indikatori
+                    const moveMatch = validMoves.find(m => m.to.r === r && m.to.c === c);
+                    if (moveMatch) {
+                        const indicator = document.createElement('div');
+                        if (piece || moveMatch.isEnPassant) {
+                            indicator.className = 'valid-capture-ring';
+                        } else {
+                            indicator.className = 'valid-move-dot';
+                        }
+                        squareEl.appendChild(indicator);
+                    }
+
+                    squareEl.addEventListener('click', () => handleSquareClick(r, c));
+                    boardEl.appendChild(squareEl);
+                }
+            }
+        }
+
+        // Katak bosilganda
+        function handleSquareClick(r, c) {
+            if (isGameOver || aiThinking || pendingPromotion) return;
+            if (gameMode === 'ai' && turn === 'b') return;
+
+            const clickedPiece = board[r][c];
+
+            // Agar mumkin bo'lgan yurishlardan biri bosilsa
+            const chosenMove = validMoves.find(m => m.to.r === r && m.to.c === c);
+            if (chosenMove) {
+                executeMove(chosenMove);
+                return;
+            }
+
+            // O'z donasini tanlash
+            if (clickedPiece && clickedPiece.color === turn) {
+                if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+                    selectedSquare = null;
+                    validMoves = [];
+                } else {
+                    selectedSquare = { r, c };
+                    validMoves = getLegalMovesForPiece(board, r, c, castlingRights, enPassantTarget);
+                }
+                renderBoard();
+            } else {
+                selectedSquare = null;
+                validMoves = [];
+                renderBoard();
+            }
+        }
+
+        // Yurishni amalga oshirish
+        function executeMove(move, promotionType = null) {
+            const piece = board[move.from.r][move.from.c];
+
+            // Agar piyoda oxirgi qatorga yetsa va hali dona tanlanmagan bo'lsa
+            if (piece.type === 'p' && (move.to.r === 0 || move.to.r === 7) && !promotionType) {
+                if (gameMode === 'ai' && turn === 'b') {
+                    promotionType = 'q'; // Bot avtomatik Farzin tanlaydi
+                } else {
+                    pendingPromotion = move;
+                    showPromotionModal(turn);
+                    return;
+                }
+            }
+
+            // Holatni saqlab qo'yish (Undo uchun)
+            saveSnapshot();
+
+            let captured = board[move.to.r][move.to.c];
+
+            // En Passant (yo'l-yo'lakay urish)
+            if (move.isEnPassant) {
+                const capRow = move.from.r;
+                captured = board[capRow][move.to.c];
+                board[capRow][move.to.c] = null;
+            }
+
+            // Urib olingan donani ro'yxatga qo'shish
+            if (captured) {
+                capturedPieces[turn].push(captured);
+            }
+
+            // Donani ko'chirish
+            board[move.to.r][move.to.c] = promotionType ? { type: promotionType, color: turn } : piece;
+            board[move.from.r][move.from.c] = null;
+
+            // Rokirovka (Castling) vaqtida Ruhni ko'chirish
+            if (move.isCastling) {
+                if (move.to.c === 6) { // Qisqa rokirovka
+                    board[move.from.r][5] = board[move.from.r][7];
+                    board[move.from.r][7] = null;
+                } else if (move.to.c === 2) { // Uzun rokirovka
+                    board[move.from.r][3] = board[move.from.r][0];
+                    board[move.from.r][0] = null;
+                }
+            }
+
+            // Rokirovka huquqlarini yangilash
+            if (piece.type === 'k') {
+                castlingRights[turn].k = false;
+                castlingRights[turn].q = false;
+            }
+            if (piece.type === 'r') {
+                if (move.from.c === 0) castlingRights[turn].q = false;
+                if (move.from.c === 7) castlingRights[turn].k = false;
+            }
+            // Agar raqib ruhi urib olinsa
+            if (move.to.r === 0 && move.to.c === 0) castlingRights.b.q = false;
+            if (move.to.r === 0 && move.to.c === 7) castlingRights.b.k = false;
+            if (move.to.r === 7 && move.to.c === 0) castlingRights.w.q = false;
+            if (move.to.r === 7 && move.to.c === 7) castlingRights.w.k = false;
+
+            // En Passant nishonini yangilash
+            if (piece.type === 'p' && Math.abs(move.to.r - move.from.r) === 2) {
+                enPassantTarget = { r: (move.from.r + move.to.r) / 2, c: move.from.c };
+            } else {
+                enPassantTarget = null;
+            }
+
+            lastMove = { from: move.from, to: move.to };
+            selectedSquare = null;
+            validMoves = [];
+
+            // Navbatni almashtirish
+            const prevTurn = turn;
+            turn = turn === 'w' ? 'b' : 'w';
+
+            // O'yin holatini tekshirish (Shoh, Mot, Pat)
+            const inCheck = isKingInCheck(board, turn);
+            const hasMoves = playerHasAnyLegalMoves(board, turn, castlingRights, enPassantTarget);
+
+            // Yurishni tarixga yozish
+            recordMoveNotation(piece, move, captured, promotionType, inCheck, !hasMoves && inCheck);
+
+            renderBoard();
+            updateUI(inCheck, hasMoves);
+
+            if (!hasMoves) {
+                isGameOver = true;
+                if (inCheck) {
+                    const winner = prevTurn === 'w' ? 'Oqlar' : 'Qoralar';
+                    showGameOverModal('Mot!', `${winner} g'alaba qozondi!`, '🏆');
+                } else {
+                    showGameOverModal('Durang (Pat)!', 'Yurish uchun imkoniyat qolmadi.', '🤝');
+                }
+                return;
+            }
+
+            // Agar AI Bot rejimi bo'lsa va Qoralar navbati bo'lsa
+            if (gameMode === 'ai' && turn === 'b' && !isGameOver) {
+                aiThinking = true;
+                document.getElementById('ai-thinking-badge').classList.remove('hidden');
+                setTimeout(() => {
+                    makeAIMove();
+                    aiThinking = false;
+                    document.getElementById('ai-thinking-badge').classList.add('hidden');
+                }, 400);
+            }
+        }
+
+        // Piyodani almashtirish oynasi
+        function showPromotionModal(color) {
+            const modal = document.getElementById('promotion-modal');
+            const choicesEl = document.getElementById('promotion-choices');
+            choicesEl.innerHTML = '';
+
+            const types = ['q', 'r', 'b', 'n'];
+            types.forEach(t => {
+                const btn = document.createElement('button');
+                btn.className = 'p-3 bg-slate-700 hover:bg-emerald-600 rounded-xl text-4xl transition-all transform hover:scale-105';
+                btn.textContent = PIECE_UNICODE[color][t];
+                btn.onclick = () => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    const move = pendingPromotion;
+                    pendingPromotion = null;
+                    executeMove(move, t);
+                };
+                choicesEl.appendChild(btn);
+            });
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // O'yin tugashi oynasi
+        function showGameOverModal(title, desc, icon) {
+            document.getElementById('gameover-title').textContent = title;
+            document.getElementById('gameover-desc').textContent = desc;
+            document.getElementById('gameover-icon').textContent = icon;
+            const modal = document.getElementById('gameover-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeGameOverModal() {
+            const modal = document.getElementById('gameover-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Interfeysni yangilash
+        function updateUI(inCheck = false, hasMoves = true) {
+            const turnText = document.getElementById('turn-text');
+            const statusSub = document.getElementById('status-subtext');
+            const turnBox = document.getElementById('turn-color-box');
+            const alertBanner = document.getElementById('alert-banner');
+            const moveCounter = document.getElementById('move-counter');
+
+            // Yurishlar raqami
+            const fullMoves = Math.floor(moveHistory.length / 2) + 1;
+            moveCounter.textContent = `Yurish: ${fullMoves}`;
+
+            // Navbat ko'rsatkichi
+            if (turn === 'w') {
+                turnText.textContent = 'Oqlar navbati';
+                turnBox.textContent = '♔';
+                turnBox.className = 'w-10 h-10 rounded-xl bg-white text-slate-900 flex items-center justify-center text-2xl shadow-md';
+                document.getElementById('player-white-bar').classList.add('ring-2', 'ring-emerald-500');
+                document.getElementById('player-black-bar').classList.remove('ring-2', 'ring-emerald-500');
+            } else {
+                turnText.textContent = 'Qoralar navbati';
+                turnBox.textContent = '♚';
+                turnBox.className = 'w-10 h-10 rounded-xl bg-zinc-900 text-white border border-slate-600 flex items-center justify-center text-2xl shadow-md';
+                document.getElementById('player-black-bar').classList.add('ring-2', 'ring-emerald-500');
+                document.getElementById('player-white-bar').classList.remove('ring-2', 'ring-emerald-500');
+            }
+
+            // Shoh / Mot ogohlantirishi
+            if (!hasMoves && inCheck) {
+                alertBanner.className = 'mt-3 p-3 rounded-xl text-sm font-bold text-center bg-rose-600 text-white shadow-lg';
+                alertBanner.textContent = `🏁 MOT! ${turn === 'w' ? 'Qoralar' : 'Oqlar'} g'olib bo'ldi!`;
+                alertBanner.classList.remove('hidden');
+                statusSub.textContent = 'O\'yin yakunlandi';
+            } else if (!hasMoves && !inCheck) {
+                alertBanner.className = 'mt-3 p-3 rounded-xl text-sm font-bold text-center bg-amber-600 text-white';
+                alertBanner.textContent = '🤝 PAT! O\'yin durang bilan tugadi.';
+                alertBanner.classList.remove('hidden');
+                statusSub.textContent = 'O\'yin yakunlandi';
+            } else if (inCheck) {
+                alertBanner.className = 'mt-3 p-3 rounded-xl text-sm font-bold text-center bg-rose-500/20 border border-rose-500 text-rose-300 animate-pulse';
+                alertBanner.textContent = `⚠️ SHOH! ${turn === 'w' ? 'Oq' : 'Qora'} shoh xavf ostida!`;
+                alertBanner.classList.remove('hidden');
+                statusSub.textContent = 'Shohni himoya qiling!';
+            } else {
+                alertBanner.classList.add('hidden');
+                statusSub.textContent = gameMode === 'ai' && turn === 'b' ? 'Bot yurishini kuting...' : 'Yurish uchun donani tanlang';
+            }
+
+            // Urib olingan donalar va ochkolar farqi
+            renderCapturedPieces();
+
+            // Ortga tugmasi holati
+            document.getElementById('undo-btn').disabled = stateSnapshots.length === 0 || aiThinking;
+        }
+
+        function renderCapturedPieces() {
+            const capWhiteEl = document.getElementById('captured-by-white');
+            const capBlackEl = document.getElementById('captured-by-black');
+
+            const sortOrder = { q: 1, r: 2, b: 3, n: 4, p: 5 };
+            const sortedW = [...capturedPieces.w].sort((a, b) => sortOrder[a.type] - sortOrder[b.type]);
+            const sortedB = [...capturedPieces.b].sort((a, b) => sortOrder[a.type] - sortOrder[b.type]);
+
+            capWhiteEl.innerHTML = sortedW.map(p => `<span>${PIECE_UNICODE[p.color][p.type]}</span>`).join('');
+            capBlackEl.innerHTML = sortedB.map(p => `<span>${PIECE_UNICODE[p.color][p.type]}</span>`).join('');
+
+            // Material ustunlik hisobi
+            const valW = sortedW.reduce((sum, p) => sum + (PIECE_VALUES[p.type] / 10), 0);
+            const valB = sortedB.reduce((sum, p) => sum + (PIECE_VALUES[p.type] / 10), 0);
+            const diff = Math.round(valW - valB);
+
+            const scoreWEl = document.getElementById('white-score');
+            const scoreBEl = document.getElementById('black-score');
+
+            if (diff > 0) {
+                scoreWEl.textContent = `+${diff}`;
+                scoreWEl.classList.remove('hidden');
+                scoreBEl.classList.add('hidden');
+            } else if (diff < 0) {
+                scoreBEl.textContent = `+${Math.abs(diff)}`;
+                scoreBEl.classList.remove('hidden');
+                scoreWEl.classList.add('hidden');
+            } else {
+                scoreWEl.classList.add('hidden');
+                scoreBEl.classList.add('hidden');
+            }
+        }
+
+        // Yurishlar tarixini chiroyli formatda yozish
+        function recordMoveNotation(piece, move, captured, promo, isCheck, isMate) {
+            const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+            let notation = '';
+
+            if (move.isCastling) {
+                notation = move.to.c === 6 ? 'O-O' : 'O-O-O';
+            } else {
+                const pieceChar = piece.type === 'p' ? '' : piece.type.toUpperCase();
+                const fromFile = (piece.type === 'p' && captured) ? files[move.from.c] : '';
+                const capChar = captured ? 'x' : '';
+                const dest = `${files[move.to.c]}${8 - move.to.r}`;
+                const promoChar = promo ? `=${promo.toUpperCase()}` : '';
+                notation = `${pieceChar}${fromFile}${capChar}${dest}${promoChar}`;
+            }
+
+            if (isMate) notation += '#';
+            else if (isCheck) notation += '+';
+
+            moveHistory.push({ color: piece.color, text: notation });
+
+            const historyEl = document.getElementById('move-history');
+            historyEl.innerHTML = '';
+
+            for (let i = 0; i < moveHistory.length; i += 2) {
+                const moveNum = Math.floor(i / 2) + 1;
+                const wMove = moveHistory[i];
+                const bMove = moveHistory[i + 1];
+
+                const row = document.createElement('div');
+                row.className = 'grid grid-cols-12 items-center px-2.5 py-1.5 rounded-lg bg-slate-900/50 hover:bg-slate-900 text-xs';
+                row.innerHTML = `
+                    <span class="col-span-2 text-slate-500 font-semibold">${moveNum}.</span>
+                    <span class="col-span-5 text-white font-semibold">${wMove ? wMove.text : ''}</span>
+                    <span class="col-span-5 text-slate-300 font-semibold">${bMove ? bMove.text : ''}</span>
+                `;
+                historyEl.appendChild(row);
+            }
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        // Ortga qaytarish (Undo)
+        function saveSnapshot() {
+            stateSnapshots.push({
+                board: board.map(row => row.map(cell => cell ? { ...cell } : null)),
+                turn,
+                lastMove: lastMove ? { from: { ...lastMove.from }, to: { ...lastMove.to } } : null,
+                enPassantTarget: enPassantTarget ? { ...enPassantTarget } : null,
+                castlingRights: JSON.parse(JSON.stringify(castlingRights)),
+                capturedPieces: JSON.parse(JSON.stringify(capturedPieces)),
+                moveHistory: [...moveHistory]
+            });
+        }
+
+        function undoMove() {
+            if (stateSnapshots.length === 0 || aiThinking) return;
+
+            // Agar AI rejimida bo'lsa, ham botning ham o'yinchining yurishini ortga qaytarish
+            if (gameMode === 'ai' && turn === 'w' && stateSnapshots.length >= 2) {
+                stateSnapshots.pop();
+            }
+
+            const prev = stateSnapshots.pop();
+            board = prev.board;
+            turn = prev.turn;
+            lastMove = prev.lastMove;
+            enPassantTarget = prev.enPassantTarget;
+            castlingRights = prev.castlingRights;
+            capturedPieces = prev.capturedPieces;
+            moveHistory = prev.moveHistory;
+            isGameOver = false;
+            selectedSquare = null;
+            validMoves = [];
+
+            // Tarixni qayta chizish
+            const historyEl = document.getElementById('move-history');
+            if (moveHistory.length === 0) {
+                historyEl.innerHTML = '<div class="text-slate-500 text-center italic text-xs py-8 font-sans">Hali yurishlar amalga oshirilmadi</div>';
+            } else {
+                historyEl.innerHTML = '';
+                for (let i = 0; i < moveHistory.length; i += 2) {
+                    const moveNum = Math.floor(i / 2) + 1;
+                    const row = document.createElement('div');
+                    row.className = 'grid grid-cols-12 items-center px-2.5 py-1.5 rounded-lg bg-slate-900/50 text-xs';
+                    row.innerHTML = `
+                        <span class="col-span-2 text-slate-500 font-semibold">${moveNum}.</span>
+                        <span class="col-span-5 text-white font-semibold">${moveHistory[i]?.text || ''}</span>
+                        <span class="col-span-5 text-slate-300 font-semibold">${moveHistory[i + 1]?.text || ''}</span>
+                    `;
+                    historyEl.appendChild(row);
+                }
+            }
+
+            renderBoard();
+            updateUI(isKingInCheck(board, turn), true);
+        }
+
+        // ==========================================
+        // SHAXMAT QOIDALARI VA YURISHLAR GENERATORI
+        // ==========================================
+
+        function inBounds(r, c) {
+            return r >= 0 && r < 8 && c >= 0 && c < 8;
+        }
+
+        // Berilgan donaning qonuniy (shohni xavf ostida qoldirmaydigan) yurishlari
+        function getLegalMovesForPiece(currentBoard, r, c, castleRights, epTarget) {
+            const piece = currentBoard[r][c];
+            if (!piece) return [];
+
+            const pseudoMoves = getPseudoMoves(currentBoard, r, c, castleRights, epTarget);
+            const legalMoves = [];
+
+            for (const move of pseudoMoves) {
+                // Rokirovkada shoh hujum ostidagi kataklardan o'tmasligi kerak
+                if (move.isCastling) {
+                    if (isKingInCheck(currentBoard, piece.color)) continue;
+                    const stepCol = move.to.c === 6 ? 5 : 3;
+                    const midBoard = simulateMove(currentBoard, { from: move.from, to: { r, c: stepCol } });
+                    if (isKingInCheck(midBoard, piece.color)) continue;
+                }
+
+                const nextBoard = simulateMove(currentBoard, move);
+                if (!isKingInCheck(nextBoard, piece.color)) {
+                    legalMoves.push(move);
+                }
+            }
+            return legalMoves;
+        }
+
+        // Taxtada yurishni simulyatsiya qilish
+        function simulateMove(currentBoard, move) {
+            const copy = currentBoard.map(row => row.slice());
+            const piece = copy[move.from.r][move.from.c];
+            copy[move.to.r][move.to.c] = piece;
+            copy[move.from.r][move.from.c] = null;
+
+            if (move.isEnPassant) {
+                copy[move.from.r][move.to.c] = null;
+            }
+            if (move.isCastling) {
+                if (move.to.c === 6) {
+                    copy[move.from.r][5] = copy[move.from.r][7];
+                    copy[move.from.r][7] = null;
+                } else if (move.to.c === 2) {
+                    copy[move.from.r][3] = copy[move.from.r][0];
+                    copy[move.from.r][0] = null;
+                }
+            }
+            return copy;
+        }
+
+        // Donalarning geometrik yurishlari
+        function getPseudoMoves(b, r, c, castleRights, epTarget, attackOnly = false) {
+            const piece = b[r][c];
+            const moves = [];
+            const color = piece.color;
+            const opp = color === 'w' ? 'b' : 'w';
+
+            const addMove = (toR, toC, extra = {}) => {
+                moves.push({ from: { r, c }, to: { r: toR, c: toC }, ...extra });
+            };
+
+            if (piece.type === 'p') {
+                const dir = color === 'w' ? -1 : 1;
+                const startRow = color === 'w' ? 6 : 1;
+
+                if (!attackOnly) {
+                    // Oldinga 1 katak
+                    if (inBounds(r + dir, c) && !b[r + dir][c]) {
+                        addMove(r + dir, c);
+                        // Boshlang'ich pozitsiyadan 2 katak
+                        if (r === startRow && !b[r + 2 * dir][c]) {
+                            addMove(r + 2 * dir, c);
+                        }
+                    }
+                }
+
+                // Diagonal urish
+                for (const dc of [-1, 1]) {
+                    const nr = r + dir;
+                    const nc = c + dc;
+                    if (inBounds(nr, nc)) {
+                        if (attackOnly) {
+                            addMove(nr, nc);
+                        } else if (b[nr][nc] && b[nr][nc].color === opp) {
+                            addMove(nr, nc);
+                        } else if (epTarget && epTarget.r === nr && epTarget.c === nc) {
+                            addMove(nr, nc, { isEnPassant: true });
+                        }
+                    }
+                }
+            }
+
+            if (piece.type === 'n') {
+                const jumps = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+                for (const [dr, dc] of jumps) {
+                    const nr = r + dr, nc = c + dc;
+                    if (inBounds(nr, nc) && (!b[nr][nc] || b[nr][nc].color === opp)) {
+                        addMove(nr, nc);
+                    }
+                }
+            }
+
+            if (piece.type === 'b' || piece.type === 'r' || piece.type === 'q') {
+                const dirs = [];
+                if (piece.type === 'b' || piece.type === 'q') dirs.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
+                if (piece.type === 'r' || piece.type === 'q') dirs.push([-1, 0], [1, 0], [0, -1], [0, 1]);
+
+                for (const [dr, dc] of dirs) {
+                    let nr = r + dr, nc = c + dc;
+                    while (inBounds(nr, nc)) {
+                        if (!b[nr][nc]) {
+                            addMove(nr, nc);
+                        } else {
+                            if (b[nr][nc].color === opp) addMove(nr, nc);
+                            break;
+                        }
+                        nr += dr;
+                        nc += dc;
+                    }
+                }
+            }
+
+            if (piece.type === 'k') {
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = r + dr, nc = c + dc;
+                        if (inBounds(nr, nc) && (!b[nr][nc] || b[nr][nc].color === opp)) {
+                            addMove(nr, nc);
+                        }
+                    }
+                }
+
+                // Rokirovka (Castling)
+                if (!attackOnly && castleRights) {
+                    const homeRow = color === 'w' ? 7 : 0;
+                    if (r === homeRow && c === 4) {
+                        // Qisqa (King-side)
+                        if (castleRights[color].k && !b[homeRow][5] && !b[homeRow][6] &&
+                            b[homeRow][7]?.type === 'r' && b[homeRow][7]?.color === color) {
+                            addMove(homeRow, 6, { isCastling: true });
+                        }
+                        // Uzun (Queen-side)
+                        if (castleRights[color].q && !b[homeRow][1] && !b[homeRow][2] && !b[homeRow][3] &&
+                            b[homeRow][0]?.type === 'r' && b[homeRow][0]?.color === color) {
+                            addMove(homeRow, 2, { isCastling: true });
+                        }
+                    }
+                }
+            }
+
+            return moves;
+        }
+
+        // Shohni topish
+        function findKing(b, color) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (b[r][c] && b[r][c].type === 'k' && b[r][c].color === color) {
+                        return { r, c };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Shoh hujum ostidami (Check)
+        function isKingInCheck(b, color) {
+            const kingPos = findKing(b, color);
+            if (!kingPos) return false;
+            const opp = color === 'w' ? 'b' : 'w';
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (b[r][c] && b[r][c].color === opp) {
+                        const attacks = getPseudoMoves(b, r, c, null, null, true);
+                        if (attacks.some(m => m.to.r === kingPos.r && m.to.c === kingPos.c)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // O'yinchida birorta qonuniy yurish bormi?
+        function playerHasAnyLegalMoves(b, color, castleRights, epTarget) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (b[r][c] && b[r][c].color === color) {
+                        const moves = getLegalMovesForPiece(b, r, c, castleRights, epTarget);
+                        if (moves.length > 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // ==========================================
+        // ODDIY AI BOT LOGIKASI (Minimax + Baholash)
+        // ==========================================
+        function makeAIMove() {
+            const allBlackMoves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] && board[r][c].color === 'b') {
+                        const moves = getLegalMovesForPiece(board, r, c, castlingRights, enPassantTarget);
+                        allBlackMoves.push(...moves);
+                    }
+                }
+            }
+
+            if (allBlackMoves.length === 0) return;
+
+            let bestScore = -Infinity;
+            let bestMoves = [];
+
+            for (const move of allBlackMoves) {
+                const simBoard = simulateMove(board, move);
+                // Piyoda oxirgi qatorga yetsa farzin deb baholaymiz
+                if (simBoard[move.to.r][move.to.c]?.type === 'p' && move.to.r === 7) {
+                    simBoard[move.to.r][move.to.c] = { type: 'q', color: 'b' };
+                }
+
+                // 1 qadam oldinni hisoblash (Oqlarning eng kuchli javobi)
+                let score = evaluateBoard(simBoard);
+                
+                // Raqibning eng yaxshi javobini ayirish (2-ply chuqurlik)
+                const oppMoves = getAllMovesForColor(simBoard, 'w');
+                let maxOppGain = 0;
+                for (const oppMove of oppMoves) {
+                    const nextSim = simulateMove(simBoard, oppMove);
+                    const boardValAfterOpp = evaluateBoard(nextSim);
+                    const loss = score - boardValAfterOpp;
+                    if (loss > maxOppGain) maxOppGain = loss;
+                }
+                score -= maxOppGain * 0.85;
+
+                // Markazni egallashga kichik bonus
+                if ((move.to.r === 3 || move.to.r === 4) && (move.to.c === 3 || move.to.c === 4)) {
+                    score += 1.5;
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMoves = [move];
+                } else if (Math.abs(score - bestScore) < 0.1) {
+                    bestMoves.push(move);
+                }
+            }
+
+            const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+            executeMove(chosenMove);
+        }
+
+        function getAllMovesForColor(b, color) {
+            const list = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (b[r][c] && b[r][c].color === color) {
+                        list.push(...getLegalMovesForPiece(b, r, c, null, null));
+                    }
+                }
+            }
+            return list;
+        }
+
+        function evaluateBoard(b) {
+            let total = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const p = b[r][c];
+                    if (p) {
+                        const val = PIECE_VALUES[p.type];
+                        total += p.color === 'b' ? val : -val;
+                    }
+                }
+            }
+            return total;
+        }
+
+        // Sahifa yuklanganda o'yinni ishga tushirish
+        window.onload = function () {
+            resetGame();
+        };
+    </script>
+</body>
+</html>
